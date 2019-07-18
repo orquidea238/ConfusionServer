@@ -5,15 +5,17 @@ const mongoose = require('mongoose');
 // J'importe le schema dishes
 const Dishes = require('../models/dishes');
 
+// Je crée ma route dishRouter:
 const dishRouter = express.Router();
 
+// J'utilise le module de traitement du corps de la requete body-parser:
 dishRouter.use(bodyParser.json());
 
 
-// dishes route-------------------------------------
+// dishes route-----------------------------------------------------------------
 dishRouter.route('/')
 .get((req, res, next) =>{
-    // on demande tous les dishes et on recupere la reponse en format json
+    // on trouve tous les dishes et on recupere la reponse en format json
     Dishes.find({})
     .then((dishes) =>{
         res.statusCode = 200;
@@ -48,7 +50,7 @@ dishRouter.route('/')
 });
 
 
-// dishId Routes------------------------------------
+// dishId Routes-----------------------------------------------------------
 dishRouter.route('/:dishId')
 .get((req, res, next) =>{
     Dishes.findById(req.params.dishId)
@@ -81,5 +83,185 @@ dishRouter.route('/:dishId')
     }, (err) => next(err))
     .catch((err) => next(err));
 });
+
+
+// dishId/comments route------------------------------------------------------------
+dishRouter.route('/:dishId/comments')
+.get((req, res, next) =>{
+    // On récupere un Id dish spécifique
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // Si le dish existe (s'il n'est pas null):
+        if(dish != null){
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            // j'affiche tous les commentaires de la dish:
+            res.json(dish.coments);
+        } 
+        else {
+            // si dish = null (il n'existe pas), je crée un erreur
+            err = new Error('Dish ' + req.params.dishId + ' not found!');
+            err.status = 404;
+            return next(err);
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+})
+.post((req, res, next) =>{
+    // Je récupere la dish spécifique par son ID
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // si la dish existe j'insére les infos invoyés (dans req.body) dans les commentaires de la dish:
+        if(dish != null){
+            dish.comments.push(req.body);
+            // J'inregistre les modifications:
+            dish.save()
+            .then((dish) =>{
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.json(dish);
+            }, (err) => next(err));
+        }
+        else {
+            err = new Error('Dish ' + req.params.dishId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+})
+.put((req, res, next) => {
+    res.statusCode = 403;
+    res.end('PUT operation not supported on /dishes/' + req.params.dishId + '/comments');
+})
+.delete((req, res, next) =>{
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // Si la dish existe bien:
+        if(dish != null){
+        // Je supprime toutes les commentaires de la dish selectionnée:
+        for(var i = (dish.comments.lenght - 1); i >= 0; i--){
+            dish.comments.id(dish.coments[i]._id).remove();
+        }
+        dish.save()
+        .then((dish) =>{
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.json(dish);
+        }, (err) => next(err));
+        }
+        // Si la dish n'existe pas:
+        else{
+            err = new Error('Dish ' + req.params.dishId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+});
+
+// dishId/comments/commentId route-----------------------------------------------------------
+dishRouter.route('/:dishId/comments/:commentId')
+.get((req, res, next) =>{
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // Si la dish existe bien et le commentaireId existe bien (n'est pas null):
+        if (dish != null && dish.comments.id(req.params.commentId) != null){
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            // Je récuper la réponse en format json et on recupere le commentaire par son id:
+            res.json(dish.comments.id(req.params.commentId));  
+        }  
+        // Si la dish n'existe pas:
+        else if(dish == null){
+            // On crée un msg d'erreur
+            err = new Error('Dish ' + req.params.dishId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+        else{
+            // sinon si la dish n'a pas de commentaires:
+            err = new Error('Comment ' + req.params.commentId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+})
+.post((req, res, next) =>{
+    res.statusCode = 403;
+    res.end('POST operation not supported on /dishes/'+ req.params.dishId
+        + '/comments/' + req.params.commentId);
+})
+.put((req, res, next) =>{
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // Si la dish existe bien et le commentaireId existe bien (n'est pas null):
+        if(dish != null && dish.comments.id(req.params.commentId) != null){
+            // si dans le body de la requete rating existe bien: 
+            if(req.body.rating){
+            // on prends le ranting dans le commentaire et on le change par le rating dans le body de la requete:
+            dish.comment.id(req.params.commentId).rating = req.body.rating;
+            }
+            // si dans le body de la requete comment existe bien:
+            if(req.body.comment){
+            // on prends le commentaireId et on le change par le comment dans le body de la requete:
+            dish.comment.id(req.params.commentId).comment = req.body.comment;
+            }
+            // On enregistre les changements:
+            dish.save()
+            .then((dish) =>{
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                // on affiche tt les dishes:
+                res.json(dish);  
+            }, (err) => next(err));
+        }
+
+        // Sinon si la dishe n'existe pas:
+        else if(dish == null){
+            err = new Error('Dish ' + req.params.dishId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+        // Sinon si c le commentaire qui n'existe pas:
+        else{
+            err = new Error('Comment ' + req.params.commentId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+})
+.delete((req, res, next) =>{
+    // Je récupere la dish spécifique par son ID
+    Dishes.findById(req.params.dishId)
+    .then((dish) =>{
+        // Si la dish existe bien et le commentaireId existe bien (n'est pas null):
+        if (dish != null && dish.comments.id(req.params.commentId) != null) {
+            dish.comments.id(req.params.commentId).remove();
+            dish.save()
+            .then((dish) => {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/json');
+                res.json(dish);                
+            }, (err) => next(err));
+        }
+        // Sinon si la dishe n'existe pas:
+        else if (dish == null) {
+            err = new Error('Dish ' + req.params.dishId + ' not found');
+            err.status = 404;
+            return next(err);
+        }
+        // Sinon si c le commentaire qui n'existe pas:
+        else {
+            err = new Error('Comment ' + req.params.commentId + ' not found');
+            err.status = 404;
+            return next(err);            
+        }
+    }, (err) => next(err))
+    .catch((err) => next(err));
+})
+
 
 module.exports = dishRouter;
