@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+var authenticate = require('../authenticate');
 
 // J'importe le schema dishes
 const Dishes = require('../models/dishes');
@@ -17,6 +18,7 @@ dishRouter.route('/')
 .get((req, res, next) =>{
     // on trouve tous les dishes et on recupere la reponse en format json
     Dishes.find({})
+    .populate('comments.author')
     .then((dishes) =>{
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -24,7 +26,7 @@ dishRouter.route('/')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post((req, res, next) =>{
+.post(authenticate.verifyUser, (req, res, next) =>{
     // On crée des dishes dans la bdd
     Dishes.create(req.body)
     .then((dish) =>{
@@ -35,11 +37,11 @@ dishRouter.route('/')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.put((req, res, next) =>{
+.put(authenticate.verifyUser, (req, res, next) =>{
     res.statusCode = 403;
     res.send('PUT operation not supported on /dishes');
 })
-.delete((req, res, next) =>{
+.delete(authenticate.verifyUser, (req, res, next) =>{
     Dishes.deleteMany({})
     .then((resp) =>{
         res.statusCode = 200;
@@ -54,6 +56,7 @@ dishRouter.route('/')
 dishRouter.route('/:dishId')
 .get((req, res, next) =>{
     Dishes.findById(req.params.dishId)
+    .populate('comments.author')
     .then((dish) =>{
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -61,11 +64,11 @@ dishRouter.route('/:dishId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post((req, res, next) =>{
+.post(authenticate.verifyUser, (req, res, next) =>{
     res.statusCode = 403;
     res.end('POST operation not supported on /dishes/' + req.params.dishId);
 })
-.put((req, res, next) =>{
+.put(authenticate.verifyUser, (req, res, next) =>{
     Dishes.findByIdAndUpdate(req.params.dishId, { $set: req.body }, { new: true })
     .then((dish) =>{
         res.statusCode = 200;
@@ -74,7 +77,7 @@ dishRouter.route('/:dishId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.delete((req, res, next) =>{
+.delete(authenticate.verifyUser, (req, res, next) =>{
     Dishes.findByIdAndRemove(req.params.dishId)
     .then((resp) =>{
         res.statusCode = 200;
@@ -90,6 +93,7 @@ dishRouter.route('/:dishId/comments')
 .get((req, res, next) =>{
     // On récupere un Id dish spécifique
     Dishes.findById(req.params.dishId)
+    .populate('comments.author')
     .then((dish) =>{
         // Si le dish existe (s'il n'est pas null):
         if(dish != null){
@@ -107,12 +111,13 @@ dishRouter.route('/:dishId/comments')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post((req, res, next) =>{
+.post(authenticate.verifyUser, (req, res, next) =>{
     // Je récupere la dish spécifique par son ID
     Dishes.findById(req.params.dishId)
     .then((dish) =>{
         // si la dish existe j'insére les infos invoyés (dans req.body) dans les commentaires de la dish:
         if(dish != null){
+            req.body.author = req.user._id;
             dish.comments.push(req.body);
             // J'inregistre les modifications:
             dish.save()
@@ -130,11 +135,11 @@ dishRouter.route('/:dishId/comments')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.put((req, res, next) => {
+.put(authenticate.verifyUser, (req, res, next) => {
     res.statusCode = 403;
     res.end('PUT operation not supported on /dishes/' + req.params.dishId + '/comments');
 })
-.delete((req, res, next) =>{
+.delete(authenticate.verifyUser, (req, res, next) =>{
     Dishes.findById(req.params.dishId)
     .then((dish) =>{
         // Si la dish existe bien:
@@ -164,6 +169,7 @@ dishRouter.route('/:dishId/comments')
 dishRouter.route('/:dishId/comments/:commentId')
 .get((req, res, next) =>{
     Dishes.findById(req.params.dishId)
+    .populate('comments.author')
     .then((dish) =>{
         // Si la dish existe bien et le commentaireId existe bien (n'est pas null):
         if (dish != null && dish.comments.id(req.params.commentId) != null){
@@ -188,12 +194,12 @@ dishRouter.route('/:dishId/comments/:commentId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.post((req, res, next) =>{
+.post(authenticate.verifyUser, (req, res, next) =>{
     res.statusCode = 403;
     res.end('POST operation not supported on /dishes/'+ req.params.dishId
         + '/comments/' + req.params.commentId);
 })
-.put((req, res, next) =>{
+.put(authenticate.verifyUser, (req, res, next) =>{
     Dishes.findById(req.params.dishId)
     .then((dish) =>{
         // Si la dish existe bien et le commentaireId existe bien (n'est pas null):
@@ -201,7 +207,7 @@ dishRouter.route('/:dishId/comments/:commentId')
             // si dans le body de la requete rating existe bien: 
             if(req.body.rating){
             // on prends le ranting dans le commentaire et on le change par le rating dans le body de la requete:
-            dish.comment.id(req.params.commentId).rating = req.body.rating;
+            dish.comments.id(req.params.commentId).rating = req.body.rating;
             }
             // si dans le body de la requete comment existe bien:
             if(req.body.comment){
@@ -211,10 +217,14 @@ dishRouter.route('/:dishId/comments/:commentId')
             // On enregistre les changements:
             dish.save()
             .then((dish) =>{
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                // on affiche tt les dishes:
-                res.json(dish);  
+                Dishes.findById(dish._id)
+                .populate('comments.author')
+                .then((dish) =>{
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    // on affiche tt les dishes:
+                    res.json(dish);
+                })    
             }, (err) => next(err));
         }
 
@@ -233,7 +243,7 @@ dishRouter.route('/:dishId/comments/:commentId')
     }, (err) => next(err))
     .catch((err) => next(err));
 })
-.delete((req, res, next) =>{
+.delete(authenticate.verifyUser, (req, res, next) =>{
     // Je récupere la dish spécifique par son ID
     Dishes.findById(req.params.dishId)
     .then((dish) =>{
@@ -242,11 +252,16 @@ dishRouter.route('/:dishId/comments/:commentId')
             dish.comments.id(req.params.commentId).remove();
             dish.save()
             .then((dish) => {
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.json(dish);                
+                Dishes.findById(dish._id)
+                .populate('comments.author')
+                .then((dish) =>{
+                    res.statusCode = 200;
+                    res.setHeader('Content-Type', 'application/json');
+                    res.json(dish);
+                })                    
             }, (err) => next(err));
         }
+
         // Sinon si la dishe n'existe pas:
         else if (dish == null) {
             err = new Error('Dish ' + req.params.dishId + ' not found');
@@ -261,7 +276,7 @@ dishRouter.route('/:dishId/comments/:commentId')
         }
     }, (err) => next(err))
     .catch((err) => next(err));
-})
+});
 
 
 module.exports = dishRouter;

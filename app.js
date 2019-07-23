@@ -8,13 +8,14 @@ var session = require('express-session');
 var fileStore = require('session-file-store')(session);
 var passport = require('passport');
 var authenticate = require('./authenticate');
+var config = require('./config');
 
 
 // J'importe le schema dishes
 const Dishes = require('./models/dishes');
 
 // Je me connecte a la base de données
-const url = 'mongodb://localhost:27017/conFusion';
+const url = config.mongoUrl;
 const connect = mongoose.connect(url, { useCreateIndex: true, useNewUrlParser: true });
 
 connect.then((db) =>{
