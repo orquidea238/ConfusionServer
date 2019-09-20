@@ -34,6 +34,15 @@ var leaderRouter = require('./routes/leaderRouter');
 
 var app = express();
 
+app.all('*', (req, res, next) =>{
+  if(req.secure){
+    return next();
+  }
+  else {
+    res.redirect(307, 'https://' + req.hostname + ':' + app.get('secPort') + req.url);
+  }
+});
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -43,45 +52,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser('12345-67890-09876-54321'));
 
-// On utilise express-session
-app.use(session({
-  name: 'session-id',
-  secret: '12345-67890-09876-54321',
-  saveUninitialized: false,
-  resave: false,
-  store: new fileStore()
-}));
 
 app.use(passport.initialize());
-app.use(passport.session());
-
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-
-// Je securise mon serveur avec l'authentification basic d'express------------------------------
-function auth (req, res, next) {
-  console.log(req.user);
-
-  // Si l'user n'est pas authentifié:
-  if(!req.user) {
-    var err = new Error('You are not authenticated!');
-    err.status = 403;
-    next(err);
-}
-
-else {
-    next();
-  }
-
-}
-
-app.use(auth);
-// -------------------------------------------------------------------
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 // J'ultilise les routes avec les chemins correspondants
 
+app.use('/', indexRouter);
+app.use('/users', usersRouter);
 app.use('/dishes', dishRouter);
 app.use('/promotions', promoRouter);
 app.use('/leaders', leaderRouter);

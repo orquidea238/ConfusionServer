@@ -5,17 +5,22 @@ var ExtractJwt = require('passport-jwt').ExtractJwt;
 var jwt = require('jsonwebtoken');// used to create, sign, and verify tokens
 var User = require('./models/users');
 
-var config = require('./config.js');
+var config = require('./config');
+
+passport.use(new LocalStrategy(User.authenticate()));
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 exports.getToken = function(user){
-    return jwt.sign(user, config.secretKey, { espiresIn: 3600 });
+    return jwt.sign(user, config.secretKey, { expiresIn: 3600 });
 };
+
 
 var opts = {};
 opts.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
 opts.secretOrKey = config.secretKey;
 
-exports.jwtFromRequest = passport.use(new JwtStrategy(opts, (jwt_payload, done) =>{
+exports.jwtPassport = passport.use(new JwtStrategy(opts, (jwt_payload, done) =>{
     console.log("JWT payload: ", jwt_payload);
     User.findOne({ _id: jwt_payload._id }, (err, user) =>{
         if(err){
@@ -32,9 +37,36 @@ exports.jwtFromRequest = passport.use(new JwtStrategy(opts, (jwt_payload, done) 
 
 exports.verifyUser = passport.authenticate('jwt', {session: false});
 
-// passport.use(new LocalStrategy(User.authenticate()));
-// passport.serializeUser(User.serializeUser());
-// passport.deserializeUser(User.deserializeUser());
+// exports.verifyAdmin = function(req, res, next) {
+//     if(req.user.admin !== true) {
+//         err = new Error('You are not authorized to perform this operation!');
+//         err.status = 403;
+//         return next(err);
+//     } else {
+//        next();
+//     }
+// }
 
-
+// assignment3 integration
+exports.verifyAdmin = function(req, res, next) {
+    // check what comes from the req
+    console.log(req.user._id);
+  
+    //checking if the
+    User.findOne({ _id: req.user._id })
+      .then(
+        user => {
+          // if the user is an admin
+          if (user.admin) {
+            next();
+          } else {
+            err = new Error("You are not authorized to perform this operation!");
+            err.status = 403;
+            return next(err);
+          }
+        },
+        err => next(err)
+      )
+      .catch(err => next(err));
+  };
 

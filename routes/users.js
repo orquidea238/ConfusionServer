@@ -8,27 +8,33 @@ var authenticate = require('../authenticate');
 router.use(bodyParser.json());
 
 /* GET users listing. */
-router.get('/', function(req, res, next) {
-  res.send('respond with a resource');
+router.get('/', authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) =>{
+  User.find({})
+    .then((users) =>{
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.json(users);
+    }, (err) => next(err))
+    .catch((err) => next(err));
 });
 
 // route Inscription
 router.post('/signup', (req, res, next) =>{
   User.register(new User({username: req.body.username}),
   req.body.password, (err, user) =>{
-    if(err){
+    if(err) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
       res.json({err: err});
     }
-    else{
+    else {
       if(req.body.firstname)
       user.firstname = req.body.firstname;
       if(req.body.lastname)
       user.lastname = req.body.lastname;
       
       user.save((err, user) =>{
-        if(err){
+        if(err) {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.json({err: err});
@@ -46,7 +52,8 @@ router.post('/signup', (req, res, next) =>{
 
 // Post route sur login (connexion)
 router.post('/login', passport.authenticate('local'), (req, res) =>{
-  // Si l'user n'est pas authentifié
+
+  // Je crée le token et je le passe a l'user:
   var token = authenticate.getToken({_id: req.user._id});
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
