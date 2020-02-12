@@ -48,25 +48,13 @@ exports.verifyUser = passport.authenticate('jwt', {session: false});
 // }
 
 // assignment3 integration
-exports.verifyAdmin = function(req, res, next) {
-    // check what comes from the req
-    console.log(req.user._id);
-  
-    //checking if the
-    User.findOne({ _id: req.user._id })
-      .then(
-        user => {
-          // if the user is an admin
-          if (user.admin) {
-            next();
-          } else {
-            err = new Error("You are not authorized to perform this operation!");
-            err.status = 403;
-            return next(err);
-          }
-        },
-        err => next(err)
-      )
-      .catch(err => next(err));
-  };
+
+exports.verifyAdmin = (req, res, next) => {
+  if (req.user.admin) {
+    next();
+  } else {
+    let err = new Error("You are not authorized to perform this operation!");
+    err.status = 403;
+    return next(err);
+}};
 
